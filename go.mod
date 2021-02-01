@@ -1,4 +1,4 @@
-module github.com/dirkarnez/caf
+module github.com/pascoej/caf
 
 go 1.15
 
