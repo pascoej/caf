@@ -4,9 +4,10 @@ import (
 	"bufio"
 	"encoding/binary"
 	"errors"
-	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
+
+	"github.com/sirupsen/logrus"
 )
 
 type FourByteString [4]byte
@@ -16,6 +17,7 @@ var ChunkTypeChannelLayout = stringToChunkType("chan")
 var ChunkTypeInformation = stringToChunkType("info")
 var ChunkTypeAudioData = stringToChunkType("data")
 var ChunkTypePacketTable = stringToChunkType("pakt")
+var ChunkTypeMidi = stringToChunkType("midi")
 
 func stringToChunkType(str string) (result FourByteString) {
 	for i, v := range str {
@@ -73,7 +75,7 @@ func encodeInt(w io.Writer, i uint64) error {
 			break
 		}
 	}
-	for i := len(byts)-1; i >= 0; i-- {
+	for i := len(byts) - 1; i >= 0; i-- {
 		var val = byts[i]
 		if i > 0 {
 			val = val | 0x80
@@ -101,8 +103,8 @@ func decodeInt(r *bufio.Reader) (uint64, error) {
 		}
 		bytesRead += 1
 		res = res << 7
-		res = res | uint64(byt & 127)
-		if byt & 128 == 0 || bytesRead >= 8 {
+		res = res | uint64(byt&127)
+		if byt&128 == 0 || bytesRead >= 8 {
 			return res, nil
 		}
 	}
@@ -155,6 +157,8 @@ type Information struct {
 type UnknownContents struct {
 	Data []byte
 }
+
+type Midi = []byte
 
 type File struct {
 	FileHeader FileHeader
@@ -398,6 +402,16 @@ func (c *Chunk) decode(r *bufio.Reader) error {
 			}
 			c.Contents = &cc
 		}
+	case ChunkTypeMidi:
+		{
+			var cc Midi
+			ba := make([]byte, c.Header.ChunkSize)
+			if err := binary.Read(r, binary.BigEndian, &ba); err != nil {
+				return err
+			}
+			cc = ba
+			c.Contents = cc
+		}
 	default:
 		{
 			logrus.Debugf("Got unknown chunk type")
@@ -455,6 +469,14 @@ func (c *Chunk) Encode(w io.Writer) error {
 				return err
 			}
 			c.Contents = &cc
+		}
+	case ChunkTypeMidi:
+		{
+			midi := c.Contents.(Midi)
+			if _, err := w.Write(midi); err != nil {
+				return err
+			}
+
 		}
 	default:
 		{
